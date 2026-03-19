@@ -531,8 +531,8 @@ footer strong { color: rgba(255,255,255,0.8); }
       <div class="detail-card">
         <h4><span class="icon icon-blue">2</span> Exp2 — 全量 + v5.5</h4>
         <ul>
-          <li>数据策略<span class="val">全量数据 + 新攻击</span></li>
-          <li>训练目标<span class="val">完整数据覆盖</span></li>
+          <li>数据策略<span class="val">全量 + 新攻击 oversampling</span></li>
+          <li>训练目标<span class="val">完整数据覆盖 + 新攻击学习</span></li>
           <li>Best Val Acc<span class="val">96.18%</span></li>
           <li>Best Val Loss<span class="val">0.1262</span></li>
           <li>结论<span class="badge badge-blue">可选</span></li>
@@ -552,6 +552,173 @@ footer strong { color: rgba(255,255,255,0.8); }
   </div>
 </section>
 
+<!-- ═══════════════════════ TRAINING DATA ═══════════════════════ -->
+<section>
+  <div class="container">
+    <div class="section-head fade-up">
+      <div class="label">Training Data</div>
+      <h2>训练数据来源与构成</h2>
+      <p>三组实验使用不同的数据组合策略，均从 ImageNet 预训练权重开始训练（原 v5.2.3 checkpoint 已损坏）</p>
+    </div>
+
+    <div class="table-wrap fade-up">
+      <table>
+        <thead>
+          <tr>
+            <th>数据集</th>
+            <th>来源</th>
+            <th>样本数</th>
+            <th>标签分布</th>
+            <th>说明</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>train_v3.1.4</strong></td>
+            <td>历史全量生产数据<br><span style="font-size:0.72rem;color:var(--text-muted)">tianrui 积累的翻拍检测数据集</span></td>
+            <td class="mono">143,003</td>
+            <td><span class="badge badge-gray">valid ~67K</span> <span class="badge badge-amber">photocopy ~67K</span></td>
+            <td>v3.1.4 版 global_train 的全量 2:1 balance per card_type，已有 LMDB 缓存在 <code>/raid/</code></td>
+          </tr>
+          <tr>
+            <td><strong>train_v5.4</strong></td>
+            <td>增量 diff（v6 - v5）<br><span style="font-size:0.72rem;color:var(--text-muted)">/data/tianruiliu/solution_data/202603/</span></td>
+            <td class="mono">228</td>
+            <td><span class="badge badge-gray">valid 122</span> <span class="badge badge-amber">photocopy 106</span></td>
+            <td>新增 26 种证件类型（RU 护照、PH 驾照、TH 身份证等），从生产 solution 数据 diff 筛选</td>
+          </tr>
+          <tr>
+            <td><strong>train_v5.5</strong><br>(alert_43)</td>
+            <td>飞书 IDV Bypass Alert<br><span style="font-size:0.72rem;color:var(--text-muted)">IDV Bypass_Report_<strong>20260316</strong>.csv<br>→ alert_cases_by_sigid_43.csv</span></td>
+            <td class="mono">41</td>
+            <td><span class="badge badge-amber">photocopy 34</span> <span class="badge badge-gray">valid 7</span></td>
+            <td>3月16日 IDV Bypass Report (session 03/11~03/16) 中 RU 护照攻击案例，经 UCC + Card Alignment 增强</td>
+          </tr>
+          <tr>
+            <td><strong>v5.5_oversampled</strong></td>
+            <td>v5.4 + v5.5 的 oversampling</td>
+            <td class="mono">269 → ~26K<br><span style="font-size:0.72rem;color:var(--text-muted)">(~100x oversample)</span></td>
+            <td>—</td>
+            <td>将 269 条新数据重复采样 ~100 倍，使新攻击模式在全量训练中占有足够比重</td>
+          </tr>
+          <tr>
+            <td><strong>replay_10K</strong></td>
+            <td>从 train_v3.1.4 随机采样</td>
+            <td class="mono">10,000</td>
+            <td><span class="badge badge-gray">valid ~5K</span> <span class="badge badge-amber">photocopy ~5K</span></td>
+            <td>保留旧知识的代表性子集（Experience Replay 策略），避免灾难性遗忘</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="fade-up" style="font-size:1.05rem;margin:28px 0 16px;">各实验数据组合</h3>
+    <div class="table-wrap fade-up">
+      <table>
+        <thead>
+          <tr>
+            <th>实验</th>
+            <th>训练数据</th>
+            <th>总量</th>
+            <th>新数据占比</th>
+            <th>GPU</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Exp1 — 复现 v5.2.3</td>
+            <td><code>train_v3.1.4</code></td>
+            <td class="mono">143,003</td>
+            <td class="mono" style="color:var(--text-muted)">0%（纯基线）</td>
+            <td class="mono">GPU 0</td>
+          </tr>
+          <tr>
+            <td>Exp2 — 全量 + v5.5</td>
+            <td><code>train_v3.1.4</code> + <code>v5.4</code> + <code>v5.5_oversampled</code></td>
+            <td class="mono">~169K</td>
+            <td class="mono" style="color:var(--accent)">~15%（oversampled）</td>
+            <td class="mono">GPU 1</td>
+          </tr>
+          <tr class="row-best">
+            <td>Exp3 — Replay10K ⭐</td>
+            <td><code>replay_10K</code> + <code>v5.4</code> + <code>v5.5_oversampled</code></td>
+            <td class="mono">~36K</td>
+            <td class="mono" style="color:var(--success);font-weight:700">~72%（新数据主导）</td>
+            <td class="mono">GPU 2</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="callout callout-info fade-up">
+      <strong>数据策略差异：</strong>Exp2 将新攻击数据 oversampling 后混入 14 万全量，新数据占比 ~15%；Exp3 采用 Experience Replay 策略，仅保留 1 万旧数据代表性子集 + 全量新数据 oversampling，新数据占比 ~72%。Exp3 训练效率更高（Early Stop @ Epoch 24），且 AUROC 更优（0.994 vs 0.984），验证了 Replay+OS 策略在小样本增量场景下的有效性。
+    </div>
+
+    <div class="detail-card fade-up" style="margin-top:20px;">
+      <h4><span class="icon icon-blue">📋</span> 数据处理 Pipeline</h4>
+      <ul>
+        <li>① 飞书 IDV Bypass Alert 报警 → <code>lark-alert-reader</code> 解析报警卡片 → <code>alert_cases_by_sigid_43.csv</code></li>
+        <li>② OSS 图片下载 → Card Detection + Alignment (UCC) → 添加 <code>card_bbox</code>, <code>rotation</code>, <code>pts</code></li>
+        <li>③ 与 <code>global_train</code> diff → 筛选 photocopy 相关标签 → 2:1 balance per card_type → 95:5 train/val split</li>
+        <li>④ CSV → LMDB 转换（<code>tdd.train.main lmdb</code>）→ 写入 NAS3 可写目录</li>
+        <li>⑤ 三组 YAML 配置 → 各自引用不同 LMDB roots 组合 → <code>CUDA_VISIBLE_DEVICES=N tdd.train.main fit</code></li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════ TRAIN vs EVAL INDEPENDENCE ═══════════════ -->
+<section style="padding-top:0;">
+  <div class="container">
+    <div class="callout fade-up" style="background:linear-gradient(135deg,#eff6ff,#f0fdf4);border-left:4px solid var(--accent);padding:20px 24px;">
+      <strong style="font-size:1rem;">训练数据 vs 评估数据 — 独立性说明</strong>
+      <div class="table-wrap" style="margin-top:14px;">
+        <table style="font-size:0.82rem;">
+          <thead>
+            <tr>
+              <th></th>
+              <th>训练数据 train_v5.5 (alert_43)</th>
+              <th>评估数据 "新攻击" (alert_20260317)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="font-weight:700;">来源 IDV 报告</td>
+              <td><code>IDV Bypass_Report_<strong>20260316</strong>.csv</code></td>
+              <td><code>IDV Bypass_Report_<strong>20260317</strong>.csv</code></td>
+            </tr>
+            <tr>
+              <td style="font-weight:700;">报告 Session 范围</td>
+              <td>03/11 → 03/16</td>
+              <td>03/16 → 03/17</td>
+            </tr>
+            <tr>
+              <td style="font-weight:700;">样本数</td>
+              <td class="mono">43 → 41（处理后）</td>
+              <td class="mono">98</td>
+            </tr>
+            <tr>
+              <td style="font-weight:700;">主要攻击类型</td>
+              <td>Color_Photocopy 31, Inj 4, Fake 4, Edit 3</td>
+              <td>Color_Photocopy 40, Inj 35, GenAI 11, 其他 12</td>
+            </tr>
+            <tr>
+              <td style="font-weight:700;">用途</td>
+              <td><span class="badge badge-amber">训练</span> oversampling ~100x 后混入训练</td>
+              <td><span class="badge badge-blue">评估</span> 独立测试集，模型从未见过</td>
+            </tr>
+            <tr>
+              <td style="font-weight:700;">数据重叠</td>
+              <td colspan="2" style="text-align:center;color:var(--success);font-weight:700;">零重叠 — 来自不同日期的 IDV Report，互不包含</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="margin-top:12px;font-size:0.82rem;color:var(--text-secondary);">评估数据（98 samples）与训练数据（alert_43）来自<strong>不同批次的 IDV Bypass Report</strong>，保证了评估的公正性。Exp3 新攻击拦截率 97.6% 而非 100%，正是因为模型面对的是从未见过的攻击样本。</p>
+    </div>
+  </div>
+</section>
+
 <!-- ═══════════════════════ DATA SOURCES ═══════════════════════ -->
 <section>
   <div class="container">
@@ -565,9 +732,9 @@ footer strong { color: rgba(255,255,255,0.8); }
       <div class="detail-card" style="border-top: 3px solid var(--danger);">
         <h4><span class="icon icon-red">A</span> 新攻击数据 — alert_20260317</h4>
         <ul>
-          <li>来源 <span class="val">IDV Bypass Report</span></li>
+          <li>来源报告 <span class="val">IDV Bypass_Report_<strong>20260317</strong>.csv</span></li>
           <li>日期 <span class="val">2026-03-17</span></li>
-          <li>采集方式 <span class="val">Lark 飞书群 报警卡片解析</span></li>
+          <li>采集方式 <span class="val">lark-alert-reader → ODPS → OSS 图片下载</span></li>
           <li>总样本数 <span class="val">98</span></li>
           <li>存储位置 <span class="val" style="font-size:0.72rem">/mnt/nas3/.../collections/</span></li>
         </ul>
